@@ -1,0 +1,289 @@
+;;; ~/.dotfiles/doom.d/config.el -*- lexical-binding: t; -*-
+(setq user-full-name "Sergei Pshonnov"
+      user-mail-address "sergei@pshonnov.ru")
+
+(setq doom-font (font-spec :family "Iosevka Custom" :size 14)
+      doom-big-font (font-spec :family "Iosevka Custom" :size 24)
+      doom-variable-pitch-font (font-spec :family "Iosevka Aile" :size 16))
+(setq display-line-numbers-type nil)
+(setq initial-frame-alist '((left . 27) (top . 54) (width . 205) (height . 49)))
+(setq doom-themes-enable-bold t
+      doom-themes-enable-italic t)
+
+(use-package doom-themes
+  :ensure t
+  :config
+  (load-theme 'doom-one t))
+
+(remove-hook '+doom-dashboard-functions #'doom-dashboard-widget-shortmenu)
+(remove-hook '+doom-dashboard-functions #'doom-dashboard-widget-footer)
+(menu-bar-mode -1)
+(tool-bar-mode -1)
+
+(setq lsp-log-io nil)
+
+(defun go-hook ()
+  (setq gofmt-command "goimports")
+  (add-hook 'before-save-hook 'gofmt-before-save))
+
+(add-hook 'go-mode-hook 'go-hook)
+
+(setq +zen-mixed-pitch-modes '(org-mode LaTeX-mode markdown-mode gfm-mode Info-mode rst-mode adoc-mode))
+
+(dolist (hook +zen-mixed-pitch-modes)
+  (add-hook (intern (concat (symbol-name hook) "-hook")) #'mixed-pitch-mode))
+(defvar +zen-text-scale 1
+  "The text-scaling level for `writeroom-mode'.")
+
+(defvar +zen-window-divider-size 4
+  "Pixel size of window dividers when `writeroom-mode' is active.")
+
+(defvar +zen--old-window-divider-size nil)
+
+(after! writeroom-mode
+  ;; Users should be able to activate writeroom-mode in one buffer (e.g. an org
+  ;; buffer) and code in another. No global behavior should be applied.
+  ;; Fullscreening/maximizing will be opt-in.
+  (defvar +zen--old-writeroom-global-effects writeroom-global-effects)
+  (setq writeroom-global-effects nil)
+  (setq writeroom-maximize-window nil)
+  (setq writeroom-width 0.6)
+
+  (add-hook! 'writeroom-mode-hook
+    (defun +zen-enable-text-scaling-mode-h ()
+      "Enable `mixed-pitch-mode' when in `+zen-mixed-pitch-modes'."
+      (when (/= +zen-text-scale 0)
+        (text-scale-set (if writeroom-mode +zen-text-scale 0))
+        (visual-fill-column-adjust)))
+    (defun +zen-toggle-large-window-dividers-h ()
+      "Make window dividers larger and easier to see."
+      (when (bound-and-true-p window-divider-mode)
+        (if writeroom-mode
+            (setq +zen--old-window-divider-size
+                  (cons window-divider-default-bottom-width
+                        window-divider-default-right-width)
+                  window-divider-default-bottom-width +zen-window-divider-size
+                  window-divider-default-right-width +zen-window-divider-size)
+          (setq window-divider-default-bottom-width (car +zen--old-window-divider-size)
+                window-divider-default-right-width (cdr +zen--old-window-divider-size)))
+        (window-divider-mode +1))))
+
+  ;; Adjust margins when text size is changed
+  (advice-add #'text-scale-adjust :after #'visual-fill-column-adjust))
+
+
+(use-package! mixed-pitch
+  :defer t
+  :hook (writeroom-mode . +zen-enable-mixed-pitch-mode-h)
+  :config
+  (defun +zen-enable-mixed-pitch-mode-h ()
+    "Enable `mixed-pitch-mode' when in `+zen-mixed-pitch-modes'."
+    (when (apply #'derived-mode-p +zen-mixed-pitch-modes)
+      (mixed-pitch-mode (if writeroom-mode +1 -1))))
+
+  (pushnew! mixed-pitch-fixed-pitch-faces
+            'org-date
+            'org-special-keyword
+            'org-property-value
+            'org-ref-cite-face
+            'org-tag
+            'org-todo-keyword-todo
+            'org-todo-keyword-habt
+            'org-todo-keyword-done
+            'org-todo-keyword-wait
+            'org-todo-keyword-kill
+            'org-todo-keyword-outd
+            'org-todo
+            'org-done
+            'font-lock-comment-face
+            'line-number
+            'line-number-current-line))
+(map! :leader
+      :desc "Toggle Zen Mode"
+      "t z" #'writeroom-mode)
+
+(setq org-directory "~/org/")
+(setq org-hide-emphasis-markers t)
+
+(use-package org-roam
+  :defer t
+  :ensure t
+  :demand t
+  :init
+  (setq org-roam-v2-ack t)
+  :bind (
+         ("C-c n I" . #'org-roam-node-insert-immediate)
+         ("C-c n p" . #'my/org-roam-find-project)
+         ("C-c n b" . #'my/org-roam-capture-inbox)
+         ("C-c n t" . #'my/org-roam-capture-task))
+  :bind-keymap
+  ("C-c n d" . org-roam-dailies-map)
+  :custom
+  (org-roam-directory "~/notes")
+  (org-roam-capture-templates
+   '(("d" "default" plain
+      "%?"
+      :if-new (file+head "%<%Y%m%d%H%M%S>-${slug}.org" "#+title: ${title}\n")
+      :unnarrowed t)
+     ("l" "programming language" plain
+      "* Characteristic:\n\n- Family: %?\n- Inspired by: \n\n* Reference:\n\n"
+      :if-new (file+head "%<%Y%m%d%H%M%S>-${slug}.org" "#+title: ${title}\n")
+      :unnarrowed t)
+     ("p" "project" plain
+      (file "~/notes/.templates/ProjectTemplate.org")
+      :if-new (file "%<%Y%m%d%H%M%S>-${slug}.org")
+      :unnarrowed t)))
+  :config
+  (require 'org-roam-dailies)
+  (org-roam-db-autosync-mode))
+
+(defun org-roam-node-insert-immediate (arg &rest args)
+  (interactive "P")
+  (let ((args (cons arg args))
+        (org-roam-capture-templates (list (append (car org-roam-capture-templates)
+                                                  '(:immediate-finish t)))))
+    (apply #'org-roam-node-insert args)))
+
+(defun my/org-roam-filter-by-tag (tag-name)
+  (lambda (node)
+    (member tag-name (org-roam-node-tags node))))
+
+(defun my/org-roam-list-notes-by-tag (tag-name)
+  (mapcar #'org-roam-node-file
+          (seq-filter
+           (my/org-roam-filter-by-tag tag-name)
+           (org-roam-node-list))))
+
+(defun my/org-roam-refresh-agenda-list ()
+  (interactive)
+  (setq org-agenda-files (my/org-roam-list-notes-by-tag "Project")))
+
+(after! org-roam-mode
+  (my/org-roam-refresh-agenda-list))
+
+(defun my/org-roam-project-finalize-hook ()
+  (remove-hook 'org-capture-after-finalize-hook #'my/org-roam-project-finalize-hook)
+  (unless org-note-abort
+    (with-current-buffer (org-capture-get :buffer)
+      (add-to-list 'org-agenda-files (buffer-file-name)))))
+
+(defun my/org-roam-find-project ()
+  (interactive)
+  (add-hook 'org-capture-after-finalize-hook #'my/org-roam-project-finalize-hook)
+  (org-roam-node-find
+   nil
+   nil
+   (my/org-roam-filter-by-tag "Project")
+   nil
+   :templates
+   '(("p" "project" plain
+      (file "~/notes/.templates/ProjectTemplate.org")
+      :if-new (file "%<%Y%m%d%H%M%S>-${slug}.org")
+      :unnarrowed t))))
+
+(setq org-roam-dailies-directory "daily/")
+
+(defun my/org-roam-capture-inbox ()
+  (interactive)
+  (org-roam-capture- :node (org-roam-node-create)
+                     :templates '(("i" "inbox" plain "  * %?"
+                                   :if-new (file+head "Inbox.org" "#+title: Inbox\n")))))
+
+(defun my/org-roam-capture-task ()
+  (interactive)
+  (add-hook 'org-capture-after-finalize-hook #'my/org-roam-project-finalize-hook)
+  (org-roam-capture- :node (org-roam-node-read
+                            nil
+                            (my/org-roam-filter-by-tag "Project"))
+                     :templates '(("p" "project" plain "** TODO %?"
+                                   :if-new
+                                   (file+head+olp
+                                    "%<%Y%m%d%H%M%S>-${slug}.org"
+                                    "#+title: ${title}\n#+category: ${title}\n#+filetags: Project"
+                                    ("Tasks"))))))
+
+(defun my/org-roam-copy-todo-to-today ()
+  (interactive)
+  (let ((org-refile-keep t) ;; Set this to nil to delete the original!
+        (org-roam-dailies-capture-templates
+         '(("t" "tasks" entry "%?"
+            :if-new (file+head+olp "%<%Y-%m-%d>.org" "#+title: %<%Y-%m-%d>\n" ("Tasks")))))
+        (org-after-refile-insert-hook #'save-buffer)
+        today-file
+        pos)
+    (save-window-excursion
+      (org-roam-dailies--capture (current-time) t)
+      (setq today-file (buffer-file-name))
+      (setq pos (point)))
+
+    ;; Only refile if the target file is different than the current file
+    (unless (equal (file-truename today-file)
+                   (file-truename (buffer-file-name)))
+      (org-refile nil nil (list "Tasks" today-file nil pos)))))
+
+(after! org-roam-mode
+  (add-to-list 'org-after-todo-state-change-hook
+               (lambda ()
+                 (when (equal org-state "DONE")
+                   (my/org-roam-copy-todo-to-today)))))
+
+(use-package! org-modern
+  :defer t
+  :after (org org-agenda org-roam)
+  :init
+  (global-org-modern-mode))
+
+(setq org-auto-align-tags nil
+      org-tags-column 0
+      org-fold-catch-invisible-edits 'show-and-error
+      org-special-ctrl-a/e t
+      org-insert-heading-respect-content t
+
+      org-hide-emphasis-markers t
+      org-pretty-entities t
+      org-ellipsis "…"
+
+      org-agenda-tags-column 0
+      org-agenda-block-separator ?─
+      org-agenda-time-grid
+      '((daily today require-timed)
+        (800 1000 1200 1400 1600 1800 2000)
+        " ┄┄┄┄┄ " "┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
+      org-agenda-current-time-string
+      "⭠ now ─────────────────────────────────────────────────"
+
+      org-modern-list '((43 . "➤")
+                        (45 . "–")
+                        (42 . "•"))
+
+      org-modern-block-name
+      '((t . t)
+        ("src" "»" "«")
+        ("example" "»–" "–«")
+        ("quote" "❝" "❞")))
+
+(use-package org-auto-tangle
+  :defer t
+  :hook (org-mode . org-auto-tangle-mode)
+  :config
+  (setq org-auto-tangle-default t))
+
+(use-package pdf-tools
+  :defer t
+  :ensure t
+  :mode ("\\.pdf\\'" . pdf-view-mode)
+  :config
+  (setq-default pdf-view-display-size 'fit-page)
+  (setq pdf-view-resize-factor 1.1)
+  (add-hook 'pdf-tools-enabled-hook 'pdf-view-themed-minor-mode ))
+
+(add-to-list 'auto-mode-alist '("\\.epub\\'" . nov-mode))
+;;(setq nov-text-width 80)
+(defun my-nov-font-setup ()
+  (face-remap-add-relative 'variable-pitch :family "Iosevka Aile"
+                                           :height 1.2))
+(add-hook 'nov-mode-hook 'my-nov-font-setup)
+(setq nov-text-width t)
+(setq visual-fill-column-center-text t)
+(add-hook 'nov-mode-hook 'visual-line-mode)
+(add-hook 'nov-mode-hook 'visual-fill-column-mode)
