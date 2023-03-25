@@ -2,4 +2,4 @@
 #+author: Sergei Pshonnov
 
 * Configuration
-- [[https://git.sr.ht/~kkeigenkai/dotfiles/tree/main/item/doom.d][Doom Emacs]]
+- [[https://git.sr.ht/~kkeigenkai/dotfiles/tree/main/item/doom.d/README.md][Doom Emacs]]
