@@ -1,11 +1,12 @@
 
 # Table of Contents
 
-1.  [Configuration](#org978cb1b)
+1.  [Configuration](#org79dd55f)
+
+Personal dotfiles. Now only doom emacs documented.
 
 
-
-<a id="org978cb1b"></a>
+<a id="org79dd55f"></a>
 
 # Configuration
 

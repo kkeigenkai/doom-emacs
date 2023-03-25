@@ -1,5 +1,7 @@
 #+title: OI's Dotfiles
 #+author: Sergei Pshonnov
 
+Personal dotfiles. Now only doom emacs documented.
+
 * Configuration
 - [[https://git.sr.ht/~kkeigenkai/dotfiles/tree/main/item/doom.d/README.md][Doom Emacs]]
